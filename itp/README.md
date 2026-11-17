@@ -1,49 +1,67 @@
 # ITP 治疗前后配对分析
 
-每次分析使用一个独立的批次目录。同一批患者的治疗前后样本一起进入该目录。如果将新患者加入原队列，用包含原有和新增样本的样本表，从 Step1 在新目录重跑。Step5 按当前目录查找已有结果，同名 CSV 已存在时会沿用，适合继续补跑当前批次。
+每批使用一个独立的运行目录。原始矩阵可以留在原来的位置。若将新患者加入原队列，在新目录里用包含原有和新增样本的样本表，从 Step1 重跑。Step5 会沿用当前目录的同名结果，适合继续补跑同一批数据。
 
-## 1. 准备本地样本表
+## 哪些自动，哪些手动
 
-在空的批次目录中，将 [样本表模板](samples_input.example.csv) 复制为 \`samples_input.csv\`，一行对应一个测序样本。
+| 步骤 | 脚本自动做 | 你需要确认或填写 |
+| --- | --- | --- |
+| Step0 扫描样本路径 | 找到 filtered 矩阵、提取样本编号、填好绝对路径。有样本记录时，按编号导入患者和分组 | 指定原始数据总目录。没有样本记录时，按实际采样填写患者标识和 Before/After |
+| Step1 检查分组 | 检查样本编号、治疗前后配对和矩阵文件，保存 `samples.csv` | 核对表中的配对和时间点是否符合采样记录 |
+| Step2 质控 | 读入矩阵、按脚本阈值过滤、输出质控图表 | 看各样本的 QC 图和保留细胞数，必要时调整阈值 |
+| Step3 整合与降维 | 标准化、PCA、Harmony、UMAP 和 t-SNE | 检查 PCA 和样本在降维图中的分布 |
+| Step4 / 4b 聚类与候选注释 | 生成聚类、marker 和可用的参考注释。两个 Step4b 可选 | 对照 marker 和参考标签审核本批各簇 |
+| Step4c / 4d 最终注释 | 生成本批聚类审核表，检查完整性并写回 Seurat | 在 `cluster_annotations.csv` 填每个聚类的 `cell_type`。目标类型用 `Monocytes` 和 `NK` |
+| Step5 差异分析 | 逐患者 Wilcoxon 和火山图，配对 pseudobulk DESeq2 | 检查输出和同一细胞类型的可用配对情况 |
+| Step6 富集分析 | 用 Step5 配对表做 KEGG ORA 和 GSEA，保存图表 | 按研究问题解读通路和方向 |
 
-| 列 | 填写内容 |
-| --- | --- |
-| \`sample_id\` | 每个样本一个唯一编号 |
-| \`patient\` | 同一患者的治疗前后填写相同标识。逐患者结果会使用该标识命名 |
-| \`group\` | 按实验记录填写 \`Before\` 或 \`After\`，每位患者各一个 |
-| \`path\` | 包含 \`matrix.mtx.gz\`、\`features.tsv.gz\`、\`barcodes.tsv.gz\` 的目录。可填绝对路径，也可填相对于批次目录的路径 |
+## 1. 自动填样本路径
 
-原始矩阵、实际样本表、注释表、RDS 和结果始终保存在本地。建议使用患者研究编号。若需要运行 SingleR，把 \`ref_Human_all.RData\` 和 \`ref_Hematopoietic.RData\` 放在批次目录的 \`references/\`，或用 \`Sys.setenv(ITP_REF_DIR = "/你的本地参考目录")\` 指向现有参考文件。没有参考文件时，Step4 仍可生成 marker 结果，人工注释时可以据此审核。
+RStudio Console 中把下面的路径改成你本机的实际位置。工作目录决定结果保存到哪里。
 
-## 2. 在 RStudio 逐步运行
-
-将以下两个路径换成代码和这次批次目录的实际位置。脚本通过 \`source()\` 读取，输出写入 \`setwd()\` 指定的批次目录。
-
-\`\`\`r
+```r
 code <- "/你的代码目录/scRNAseq-Seurat-Pipeline/itp"
 setwd("/你的数据目录/ITP_新批次")
 
-source(file.path(code, "Step1_数据整理与分组.R"))      # 确认样本和配对
-source(file.path(code, "Step2_数据读取与质控过滤.R"))  # Read10X 和 QC
-source(file.path(code, "Step3_数据整合与降维.R"))      # 标准化、PCA、Harmony、UMAP/t-SNE
-source(file.path(code, "Step4_聚类与注释.R"))          # 聚类、marker、参考注释
-source(file.path(code, "Step4c_校正注释.R"))           # 生成聚类审核表和 marker 表
-\`\`\`
+source(file.path(code, "Step0_扫描样本路径.R"))
+prepare_itp_samples(raw_root = "/你的原始数据总目录")
+```
 
-可选的两个 Step4b 脚本提供更细的参考注释。先看 \`results/08_clusterMarkers.csv\` 和可用的参考注释结果，再在本批生成的 \`cluster_annotations.csv\` 填写每个聚类的最终 \`cell_type\`。新批次的聚类编号需重新核对。要分析的两类细胞应使用标签 \`Monocytes\` 和 \`NK\`。
+脚本扫描 `filtered_cell_gene_matrix` 和 `filtered_feature_bc_matrix`，支持 `S01/filtered_feature_bc_matrix` 和 `S01/outs/filtered_feature_bc_matrix` 两种结构。自动填 ID 和路径，打开生成的 `samples_input.csv` 补齐患者和治疗前后。
 
-填好注释后，再在同一批次目录运行下面三步。
+如果已有本地 `sample_metadata.csv`，包含 `sample_id`、`patient`、`group` 三列，可直接用下面的调用代替上面的 `prepare_itp_samples()`。编号需与样本文件夹名一致。已有的 `samples_input.csv` 会保留。
 
-\`\`\`r
+```r
+prepare_itp_samples(
+  raw_root = "/你的原始数据总目录",
+  metadata_file = "/你的本地记录目录/sample_metadata.csv"
+)
+```
+
+也可以直接复制[虚拟样本表](samples_input.example.csv)手工填表。原始矩阵、真实样本表、注释表、RDS 和结果都保存在本地。需要 SingleR 参考注释时，把 `ref_Human_all.RData` 和 `ref_Hematopoietic.RData` 放在批次目录的 `references/`，或设置 `Sys.setenv(ITP_REF_DIR = "/本地参考目录")`。没有参考文件时，Step4 仍可生成 marker。
+
+## 2. 在同一个批次目录逐步运行
+
+```r
+source(file.path(code, "Step1_数据整理与分组.R"))
+source(file.path(code, "Step2_数据读取与质控过滤.R"))
+source(file.path(code, "Step3_数据整合与降维.R"))
+source(file.path(code, "Step4_聚类与注释.R"))
+source(file.path(code, "Step4c_校正注释.R"))
+```
+
+对照 `results/08_clusterMarkers.csv`、marker 表和参考注释填好 `cluster_annotations.csv`，再继续。每批的聚类编号都要重新审核。
+
+```r
 source(file.path(code, "Step4d_最终注释.R"))
 source(file.path(code, "Step5_NK与单核细胞配对差异分析.R"))
 source(file.path(code, "Step6_NK与单核细胞富集分析.R"))
-\`\`\`
+```
 
-Step5 对每位患者分别做细胞层面的 Wilcoxon 比较，并用原始计数按患者和时间点汇总，拟合 \`~ patient + group\` 的 DESeq2 模型。Step6 从本批生成的配对差异表做 KEGG ORA 和 GSEA。结果分细胞类型存放于 \`差异富集 result/\`，CSV 在 \`05_differential/\`，PDF 在 \`06_visualization/\`。
+Step5 的 DESeq2 设计式是 `~ patient + group`。差异与富集结果按细胞类型保存在 `差异富集 result/`。CSV 在 `05_differential/`，PDF 在 `06_visualization/`。
 
 ## 主要 R 依赖
 
 - CRAN：Seurat、dplyr、magrittr、ggplot2、patchwork、harmony、clustree、data.table、circlize、tidyr、msigdbr、ggridges。
 - Bioconductor：SingleR、DESeq2、ComplexHeatmap、clusterProfiler、enrichplot、org.Hs.eg.db、fgsea、DOSE。
-- Step4 还依赖 presto。参考注释和富集数据库使用本机可用版本。
+- Step4 还依赖 presto。

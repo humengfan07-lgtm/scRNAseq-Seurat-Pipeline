@@ -5,6 +5,7 @@ runs/
 **/filtered_feature_bc_matrix/
 **/references/
 **/samples_input.csv
+**/sample_metadata.csv
 **/samples.csv
 **/cluster_annotations.csv
 **/QC_plots/
