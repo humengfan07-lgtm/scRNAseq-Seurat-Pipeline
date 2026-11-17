@@ -1,0 +1,22 @@
+# Cohort inputs, references and outputs stay local.
+runs/
+**/raw/
+**/filtered_cell_gene_matrix/
+**/filtered_feature_bc_matrix/
+**/references/
+**/samples_input.csv
+**/samples.csv
+**/cluster_annotations.csv
+**/QC_plots/
+**/QC_report.csv
+**/results/
+**/diff_genes/
+**/差异富集 result/
+*.rds
+*.RData
+*.Rdata
+.Rhistory
+.RData
+.Rproj.user/
+.DS_Store
+Rplots.pdf

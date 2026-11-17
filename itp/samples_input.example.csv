@@ -1,0 +1,5 @@
+sample_id,patient,group,path
+P01_before,P01,Before,raw/P01_before/filtered_cell_gene_matrix
+P01_after,P01,After,raw/P01_after/filtered_cell_gene_matrix
+P02_before,P02,Before,raw/P02_before/filtered_cell_gene_matrix
+P02_after,P02,After,raw/P02_after/filtered_cell_gene_matrix
