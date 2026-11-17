@@ -50,7 +50,7 @@ source(file.path(code, "Step4_聚类与注释.R"))
 source(file.path(code, "Step4c_校正注释.R"))
 ```
 
-对照 `results/08_clusterMarkers.csv`、marker 表和参考注释填好 `cluster_annotations.csv`，再继续。每批的聚类编号都要重新审核。
+对照 `results/08_clusterMarkers.csv`、[官方 marker 参考库](marker_references.md)和参考注释填好 `cluster_annotations.csv`，再继续。每批的聚类编号都要重新审核。
 
 ```r
 source(file.path(code, "Step4d_最终注释.R"))
